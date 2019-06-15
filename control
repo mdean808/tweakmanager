@@ -1,0 +1,11 @@
+Package: xyz.mogdan.tweakmanager
+Name: TweakManager
+Version: 0.1.0
+Architecture: iphoneos-arm
+Description: Manage enabled/disabled tweaks in bulk.
+Maintainer: Unicorn808
+Author: Unicorn808 <morgandeanhi@gmail.com>
+Section: Utilities
+Homepage: https://repo.mogdan.xyz/web/xyz.mogdan.tweakmanager/
+Depiction: https://repo.mogdan.xyz/web/xyz.mogdan.tweakmanager/
+SileoDepiction: https://repo.mogdan.xyz/sileo/xyz.mogdan.tweakmanager/depiction.json
