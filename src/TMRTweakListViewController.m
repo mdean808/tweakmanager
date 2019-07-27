@@ -30,7 +30,6 @@
 	[dirs enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
 	         NSString *filename = (NSString *)obj;
 	         NSString *extension = [filename pathExtension];
-			 NSLog(@"TMRLog: extension: %@", extension);
 	         if ([extension isEqualToString:@"dylib"]) {
 	                 Tweak *newTweak = [[Tweak alloc] init];
 	                 newTweak.name = filename;
@@ -52,11 +51,11 @@
 	_newTweakage.tweaks = _tweaks;
 	// udpate the global var
 	[[TMRGlobalData sharedGlobalData].tweakages addObject:_newTweakage];
-	NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
+	NSMutableDictionary *prefs = [NSMutableDictionary dictionaryWithContentsOfFile:@"/Applications/TweakManager.app/tweakmanager_prefs.plist"];
 	NSData *data = [NSKeyedArchiver
 	                archivedDataWithRootObject:[TMRGlobalData sharedGlobalData].tweakages];
 	[prefs setObject:data forKey:@"tweakages"];
-	[prefs synchronize];
+	[prefs writeToFile:@"/Applications/TweakManager.app/tweakmanager_prefs.plist" atomically:YES];
 	// send notificaiton to update the root view controller
 	[[NSNotificationCenter defaultCenter] postNotificationName:@"reload_data" object:self];
 	// Display the root view controller
@@ -107,7 +106,6 @@
 		[_tweaks[indexPath.row] setValue:[NSNumber numberWithBool:NO] forKey:@"enabled"];
 	}
 	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	NSLog(@"Tweak: %@, Enabled: %@", [_tweaks[indexPath.row] valueForKey:@"name"], [_tweaks[indexPath.row] valueForKey:@"enabled"]);
 }
 
 @end

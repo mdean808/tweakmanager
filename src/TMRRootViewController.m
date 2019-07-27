@@ -5,7 +5,7 @@
 #import "TMRTweakageEditViewController.h"
 #import "TweakManager.h"
 #import <spawn.h>
-
+// Start app
 @implementation TMRRootViewController
 
 - (void)loadView {
@@ -26,37 +26,63 @@
 	 selector:@selector(handle_data)
 	 name:@"reload_data"
 	 object:nil];
+	NSFileManager *fileManager = [NSFileManager defaultManager];
+	NSMutableDictionary *prefs = [[NSMutableDictionary alloc] init];
 
-	NSUserDefaults *prefs = [[NSUserDefaults alloc] initWithSuiteName:@"tweakmanager_prefs"];
-	NSData *data = [prefs objectForKey:@"tweakages"];
-	if ([NSKeyedUnarchiver unarchiveObjectWithData:data]) {
-		[TMRGlobalData sharedGlobalData].tweakages =
-			[NSKeyedUnarchiver unarchiveObjectWithData:data];
-		[TMRGlobalData sharedGlobalData].enabledTweakageIndex =
-			[prefs integerForKey:@"activeTweakageIndex"];
-		NSLog(@"TMRLog: Active Tweakage From Defualts: %ld", [prefs integerForKey:@"activeTweakageIndex"]);
-		NSLog(@"TMRLog: Active Tweakage ID: %ld", [TMRGlobalData sharedGlobalData].enabledTweakageIndex);
-		NSLog(@"TMRLog: Active Tweakage: %@", [[TMRGlobalData sharedGlobalData].tweakages[[TMRGlobalData sharedGlobalData].enabledTweakageIndex] name]);
+	if ([fileManager fileExistsAtPath: @"/Applications/TweakManager.app/tweakmanager_prefs.plist"]) {
+		prefs = [NSMutableDictionary dictionaryWithContentsOfFile:@"/Applications/TweakManager.app/tweakmanager_prefs.plist"];
+		NSData *data = [prefs objectForKey:@"tweakages"];
+		if ([NSKeyedUnarchiver unarchiveObjectWithData:data]) {
+			[TMRGlobalData sharedGlobalData].tweakages =
+				[NSKeyedUnarchiver unarchiveObjectWithData:data];
+			[TMRGlobalData sharedGlobalData].enabledTweakageIndex =
+				[[prefs valueForKey:@"activeTweakageIndex"] intValue];
+			NSLog(@"TMGRLog: Active Tweakage: %@", [[TMRGlobalData sharedGlobalData].tweakages[[TMRGlobalData sharedGlobalData].enabledTweakageIndex] name]);
+			// Load new tweaks into defaults
+			NSMutableArray *tweaks = [[NSMutableArray alloc] init];
+			NSString *sourcePath = @"/Library/MobileSubstrate/DynamicLibraries/";
+			NSArray* dirs = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:sourcePath
+			                 error:NULL];
+			[dirs enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
+			         NSString *filename = (NSString *)obj;
+			         NSString *extension = [filename pathExtension];
+			         if ([extension isEqualToString:@"dylib"]) {
+			                 Tweak *newTweak = [[Tweak alloc] init];
+			                 newTweak.name = filename;
+			                 newTweak.enabled = [NSNumber numberWithBool:YES];
+			                 [tweaks addObject: newTweak];
+				 }
+			         if ([ extension isEqualToString:@"TMRDisabled"]) {
+			                 Tweak *newTweak = [[Tweak alloc] init];
+			                 newTweak.name = [filename stringByReplacingOccurrencesOfString:@".TMRDisabled" withString:@""];
+			                 newTweak.enabled = [NSNumber numberWithBool:YES];
+			                 [tweaks addObject: newTweak];
+				 }
+			 }];
+
+			// Build the default tweakge
+			Tweakage *defaultTweakage = [[Tweakage alloc] init];
+			defaultTweakage.tweaks = tweaks;
+			defaultTweakage.name = @"Default";
+			// Add the default tweakage
+			[TMRGlobalData sharedGlobalData].tweakages[0] = defaultTweakage;
+		}
 	} else {
-		NSLog(@"TMRLog: No Defaults to load");
+		[prefs writeToFile:@"/Applications/TweakManager.app/tweakmanager_prefs.plist" atomically:YES];
+		NSLog(@"TMGRLog: No Defaults to load");
 	}
 }
 
 - (void)respringButtonTapped:(id)sender {
-	NSUserDefaults *prefs = [[NSUserDefaults alloc] initWithSuiteName:@"tweakmanager_prefs"];
-	[prefs setInteger:[TMRGlobalData sharedGlobalData].enabledTweakageIndex
+	NSMutableDictionary *prefs = [NSMutableDictionary dictionaryWithContentsOfFile:@"/Applications/TweakManager.app/tweakmanager_prefs.plist"];
+	[prefs setValue:[NSString stringWithFormat: @"%ld", [TMRGlobalData sharedGlobalData].enabledTweakageIndex]
 	 forKey:@"activeTweakageIndex"];
-	[prefs synchronize];
-	NSLog(@"TMRLog: Respring - Tweakage index in userdefaults: %ld", [prefs integerForKey:@"activeTweakageIndex"]);
+	[prefs writeToFile:@"/Applications/TweakManager.app/tweakmanager_prefs.plist" atomically:YES];
+
+	// Respring
 	pid_t pid;
-
-	int status;
-
-	const char *args[] = {"killall", "-9", "backboardd", NULL};
-
-	posix_spawn(&pid, "/usr/bin/killall", NULL, NULL, (char *const *)args, NULL);
-
-	waitpid(pid, &status, WEXITED);
+	const char *args[] = {"sbreload", NULL, NULL, NULL};
+	posix_spawn(&pid, "/usr/bin/sbreload", NULL, NULL, (char *const *)args, NULL);
 }
 
 - (void)addButtonTapped:(id)sender {
@@ -101,11 +127,11 @@
 
 - (void)handle_data {
 	// Update the data
-	NSUserDefaults *prefs = [[NSUserDefaults alloc] initWithSuiteName:@"tweakmanager_prefs"];
+	NSMutableDictionary *prefs = [NSMutableDictionary dictionaryWithContentsOfFile:@"/Applications/TweakManager.app/tweakmanager_prefs.plist"];
 	NSData *data = [NSKeyedArchiver
 	                archivedDataWithRootObject:[TMRGlobalData sharedGlobalData].tweakages];
 	[prefs setObject:data forKey:@"tweakages"];
-	[prefs synchronize];
+	[prefs writeToFile:@"/Applications/TweakManager.app/tweakmanager_prefs.plist" atomically:YES];
 
 	[[self tableView] reloadData];
 }
@@ -180,7 +206,7 @@
 		                                            // Ask for a name
 		                                            UIAlertController *alert = [UIAlertController
 		                                                                        alertControllerWithTitle:[NSString stringWithFormat:@"%@ Copy.", [TMRGlobalData sharedGlobalData]
-		                                                                                              .tweakages[indexPath.row].name]
+		                                                                                                  .tweakages[indexPath.row].name]
 		                                                                        message:@"Use a different name."
 		                                                                        preferredStyle:UIAlertControllerStyleAlert];
 
@@ -194,11 +220,12 @@
 		                                                                         newTweakage.tweaks = [TMRGlobalData sharedGlobalData]
 		                                                                                              .tweakages[indexPath.row].tweaks;
 		                                                                         [[TMRGlobalData sharedGlobalData].tweakages addObject:newTweakage];
-		                                                                         NSUserDefaults *prefs = [NSUserDefaults standardUserDefaults];
+		                                                                         NSMutableDictionary *prefs = [NSMutableDictionary dictionaryWithContentsOfFile:@"/Applications/TweakManager.app/tweakmanager_prefs.plist"];
 		                                                                         NSData *data = [NSKeyedArchiver
 		                                                                                         archivedDataWithRootObject:[TMRGlobalData sharedGlobalData].tweakages];
 		                                                                         [prefs setObject:data forKey:@"tweakages"];
-		                                                                         [prefs synchronize];
+		                                                                         [prefs writeToFile:@"/Applications/TweakManager.app/tweakmanager_prefs.plist" atomically:YES];
+
 		                                                                         [[self tableView] reloadData];
 										 }];
 
@@ -267,15 +294,13 @@
 		                                                                                   [NSArray arrayWithObject:indexPath]
 		                                                                                   withRowAnimation:
 		                                                                                   UITableViewRowAnimationFade];
-		                                                                                  NSUserDefaults *prefs = [[NSUserDefaults alloc] initWithSuiteName:@"tweakmanager_prefs"];
+		                                                                                  NSMutableDictionary *prefs = [NSMutableDictionary dictionaryWithContentsOfFile:@"/Applications/TweakManager.app/tweakmanager_prefs.plist"];
 		                                                                                  NSData *data = [NSKeyedArchiver
-		                                                                                                  archivedDataWithRootObject:
-		                                                                                                  [TMRGlobalData sharedGlobalData]
-		                                                                                                  .tweakages];
-		                                                                                  [prefs setObject:data forKey:@"tweakages"];
-		                                                                                  [prefs setInteger:[TMRGlobalData sharedGlobalData].enabledTweakageIndex
+		                                                                                                  archivedDataWithRootObject:[TMRGlobalData sharedGlobalData].tweakages];
+		                                                                                  [prefs setValue:[NSString stringWithFormat: @"%ld", [TMRGlobalData sharedGlobalData].enabledTweakageIndex]
 		                                                                                   forKey:@"activeTweakageIndex"];
-		                                                                                  [prefs synchronize];
+		                                                                                  [prefs setObject:data forKey:@"tweakages"];
+		                                                                                  [prefs writeToFile:@"/Applications/TweakManager.app/tweakmanager_prefs.plist" atomically:YES];
 											  }];
 
 		                                              UIAlertAction *cancelAction =
@@ -313,39 +338,28 @@
 			NSString *tweakPath = [@"/Library/MobileSubstrate/DynamicLibraries/"
 			                       stringByAppendingString:tweak.name];
 			if (tweak.enabled == [NSNumber numberWithBool:YES]) {
-				//NSLog(@"TMRLog: Enabling tweak in directory: %@", tweakPath);
 
 				if (![fileManager fileExistsAtPath:tweakPath]) {
-					NSLog(@"TMRLog: Tweak is disabled or deleted, attempting to re-enable.");
 					[[NSFileManager defaultManager]
 					 moveItemAtPath:[tweakPath stringByAppendingString:@".TMRDisabled"]
 					 toPath:tweakPath
 					 error:nil];
-				} else {
-					//NSLog(@"TMRLog: Tweak is already enabled.");
 				}
 			} else {
-				NSLog(@"TMRLog: Disabling tweak: %@", tweak.name);
 				if ([fileManager fileExistsAtPath:tweakPath]) {
-					NSLog(@"TMRLog: Tweak is enabled, attempting to disable.");
 					[[NSFileManager defaultManager]
 					 moveItemAtPath:tweakPath
 					 toPath:[tweakPath stringByAppendingString:@".TMRDisabled"]
 					 error:nil];
-				} else {
-					NSLog(@"TMRLog: Tweak is already disabled");
 				}
 			}
 		}
 		// Set the index of the new tweakage
-		NSLog(@"TMRLog: Tweakage Index: %ld", indexPath.row);
 		[TMRGlobalData sharedGlobalData].enabledTweakageIndex = indexPath.row;
-		NSLog(@"TMRLog: Tweakage Index in data: %ld", [TMRGlobalData sharedGlobalData].enabledTweakageIndex);
-		NSUserDefaults *prefs = [[NSUserDefaults alloc] initWithSuiteName:@"tweakmanager_prefs"];
-		[prefs setInteger:[TMRGlobalData sharedGlobalData].enabledTweakageIndex
+		NSMutableDictionary *prefs = [NSMutableDictionary dictionaryWithContentsOfFile:@"/Applications/TweakManager.app/tweakmanager_prefs.plist"];
+		[prefs setValue:[NSString stringWithFormat: @"%ld", [TMRGlobalData sharedGlobalData].enabledTweakageIndex]
 		 forKey:@"activeTweakageIndex"];
-		[prefs synchronize];
-		NSLog(@"TMRLog: Tweakage index in userdefaults: %ld", [prefs integerForKey:@"activeTweakageIndex"]);
+		[prefs writeToFile:@"/Applications/TweakManager.app/tweakmanager_prefs.plist" atomically:YES];
 		for (Tweak *tweak in [TMRGlobalData sharedGlobalData]
 		     .tweakages[[TMRGlobalData sharedGlobalData].enabledTweakageIndex]
 		     .tweaks) {
@@ -353,35 +367,27 @@
 			NSString *tweakPath = [@"/Library/MobileSubstrate/DynamicLibraries/"
 			                       stringByAppendingString:tweak.name];
 			if (tweak.enabled == [NSNumber numberWithBool:YES]) {
-				//NSLog(@"TMRLog: Enabling tweak in directory: %@", tweakPath);
 
 				if (![fileManager fileExistsAtPath:tweakPath]) {
-					NSLog(@"TMRLog: Tweak is disabled or deleted, attempting to re-enable.");
 					NSError *error = nil;
 					BOOL fileWorked = [fileManager
 					                   moveItemAtPath:[tweakPath stringByAppendingString:@".TMRDisabled"]
 					                   toPath:tweakPath
 					                   error:&error];
 					if (!fileWorked) {
-						NSLog(@"TMRLog: Renaming Error: %@", [error localizedDescription]);
+						NSLog(@"TMGRLog: Renaming Error: %@", [error localizedDescription]);
 					}
-				} else {
-					//NSLog(@"TMRLog: Tweak is already enabled.");
 				}
 			} else {
-				NSLog(@"TMRLog: Disabling tweak: %@", tweak.name);
 				if ([fileManager fileExistsAtPath:tweakPath]) {
-					NSLog(@"TMRLog: Tweak is enabled, attempting to disable.");
 					NSError *error = nil;
 					BOOL fileWorked = [fileManager
 					                   moveItemAtPath:tweakPath
 					                   toPath:[tweakPath stringByAppendingString:@".TMRDisabled"]
 					                   error:&error];
 					if (!fileWorked) {
-						NSLog(@"TMRLog: Renaming Error: %@", [error localizedDescription]);
+						NSLog(@"TMGRLog: Renaming Error: %@", [error localizedDescription]);
 					}
-				} else {
-					NSLog(@"TMRLog: Tweak is already disabled");
 				}
 			}
 		}

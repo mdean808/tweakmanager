@@ -1,2 +1,2 @@
 chmod 7777 /Applications/TweakManager.app/TweakManager
-uicache
+uicache --path /Applications/TweakManager.app

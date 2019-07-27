@@ -13,6 +13,40 @@
 	self.title = [NSString stringWithFormat:@"Edit %@", [TMRGlobalData sharedGlobalData].tweakages[_tweakageIndex].name];
 	self.navigationItem.leftBarButtonItem = [[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(doneButtonTapped:)] autorelease];
 	self.navigationItem.rightBarButtonItem = [[[UIBarButtonItem alloc] initWithTitle:@"Modify" style:UIBarButtonItemStylePlain target:self action:@selector(modifyButtonTapped:)] autorelease];
+	// todo: update specific tweakage based on tweakageIndex
+	NSMutableArray *tweaks = [[NSMutableArray alloc] init];
+	NSString *sourcePath = @"/Library/MobileSubstrate/DynamicLibraries/";
+	NSArray* dirs = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:sourcePath
+	                 error:NULL];
+	[dirs enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
+	        NSString *filename = (NSString *)obj;
+	        NSString *extension = [filename pathExtension];
+	        if ([extension isEqualToString:@"dylib"]) {
+	                 Tweak *newTweak = [[Tweak alloc] init];
+	                 newTweak.name = filename;
+					newTweak.enabled = [NSNumber numberWithBool:YES];
+					 for (int i = 0; i < [TMRGlobalData sharedGlobalData].tweakages[_tweakageIndex].tweaks.count; i++) {
+						Tweak *tweakageTweak = [TMRGlobalData sharedGlobalData].tweakages[_tweakageIndex].tweaks[i];
+						if ([tweakageTweak.name isEqual:newTweak.name]) {
+	                 		newTweak.enabled = tweakageTweak.enabled;
+						}
+					 }
+	                 [tweaks addObject: newTweak];
+		 	}
+	        if ([ extension isEqualToString:@"TMRDisabled"]) {
+	                 Tweak *newTweak = [[Tweak alloc] init];
+	                 newTweak.name = [filename stringByReplacingOccurrencesOfString:@".TMRDisabled" withString:@""];
+					newTweak.enabled = [NSNumber numberWithBool:YES];
+	                 for (int i = 0; i < [TMRGlobalData sharedGlobalData].tweakages[_tweakageIndex].tweaks.count; i++) {
+						Tweak *tweakageTweak = [TMRGlobalData sharedGlobalData].tweakages[_tweakageIndex].tweaks[i];
+						if ([tweakageTweak.name isEqual:newTweak.name]) {
+	                 		newTweak.enabled = tweakageTweak.enabled;
+						}
+					 }
+	                 [tweaks addObject: newTweak];
+		 	}
+	 }];
+	[TMRGlobalData sharedGlobalData].tweakages[_tweakageIndex].tweaks = tweaks;
 	[[self tableView] reloadData];
 }
 
@@ -105,7 +139,6 @@
 	}
 
 	Tweak *tweak = [TMRGlobalData sharedGlobalData].tweakages[_tweakageIndex].tweaks[indexPath.row];
-	NSLog(@"FilenameFromCell: %@", tweak.name);
 	cell.textLabel.text = tweak.name;
 	if (tweak.enabled == [NSNumber numberWithBool:YES]) {
 		cell.accessoryType = UITableViewCellAccessoryCheckmark;
@@ -127,7 +160,6 @@
 		[[TMRGlobalData sharedGlobalData].tweakages[_tweakageIndex].tweaks[indexPath.row] setValue:[NSNumber numberWithBool:NO] forKey:@"enabled"];
 	}
 	[tableView deselectRowAtIndexPath:indexPath animated:YES];
-	NSLog(@"Tweak: %@, Enabled: %@", [[TMRGlobalData sharedGlobalData].tweakages[_tweakageIndex].tweaks[indexPath.row] valueForKey:@"name"], [[TMRGlobalData sharedGlobalData].tweakages[_tweakageIndex].tweaks[indexPath.row] valueForKey:@"enabled"]);
 }
 
 @end
